@@ -1,5 +1,7 @@
 .expr_history
 .venv
 .idea
+__pycache__
+test.py
 test_evaluate_evaluator.py
 test_*.py
