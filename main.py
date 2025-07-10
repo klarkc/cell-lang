@@ -540,9 +540,9 @@ class PeanoMatcher(ExpressionMatcher):
         return None
 
 
-# REPL with History Support
+# REPL with History and Multiline Support
 class REPL:
-    """Read-Eval-Print Loop with history support."""
+    """Read-Eval-Print Loop with history and multiline support."""
 
     def __init__(self):
         self.parser = ExpressionParser()
@@ -584,6 +584,88 @@ class REPL:
         else:
             return input(prompt)
 
+    def is_complete_expression(self, text: str) -> bool:
+        """Check if the expression is complete (balanced brackets)."""
+        if not text.strip():
+            return True
+
+        # Count brackets to determine if expression is complete
+        bracket_count = 0
+        paren_count = 0
+        in_string = False
+        escape_next = False
+
+        for char in text:
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if in_string:
+                continue
+
+            if char == '[':
+                bracket_count += 1
+            elif char == ']':
+                bracket_count -= 1
+            elif char == '(':
+                paren_count += 1
+            elif char == ')':
+                paren_count -= 1
+
+        return bracket_count == 0 and paren_count == 0
+
+    def get_multiline_input(self):
+        """Get potentially multiline input from user."""
+        lines = []
+        prompt = ">>> "
+
+        while True:
+            try:
+                line = self.get_input(prompt)
+
+                # Check for special commands on first line
+                if not lines and line.strip().startswith(':'):
+                    return line
+
+                lines.append(line)
+                current_text = '\n'.join(lines)
+
+                # If line ends with backslash, continue on next line
+                if line.rstrip().endswith('\\'):
+                    lines[-1] = line.rstrip()[:-1]  # Remove the backslash
+                    prompt = "... "
+                    continue
+
+                # Check if expression is complete
+                if self.is_complete_expression(current_text):
+                    return current_text
+                else:
+                    prompt = "... "
+
+            except KeyboardInterrupt:
+                if lines:
+                    # Cancel current multiline input
+                    print("\n(Cancelled)")
+                    return ""
+                else:
+                    # Re-raise to exit REPL
+                    raise
+            except EOFError:
+                if lines:
+                    # Treat EOF as completion of multiline input
+                    return '\n'.join(lines)
+                else:
+                    # Re-raise to exit REPL
+                    raise
+
     def run(self):
         """Run the REPL."""
         print("Expression Parser REPL")
@@ -593,11 +675,12 @@ class REPL:
         print("  - Nested: Expr[NestedExpr[Arg]]")
         print("  - Assignment: Name = Expr[A]")
         print("  - Commands: :help, :history, :quit")
+        print("  - Multiline: Use \\ at end of line or leave brackets open")
         print()
 
         while True:
             try:
-                line = self.get_input(">>> ").strip()
+                line = self.get_multiline_input().strip()
 
                 if not line:
                     continue
@@ -622,8 +705,9 @@ class REPL:
                 result = self.evaluator.evaluate(ast)
                 print(result)
 
-                # Add to history
-                self.history.append(line)
+                # Add to history (normalize whitespace for history)
+                normalized_line = ' '.join(line.split())
+                self.history.append(normalized_line)
 
             except KeyboardInterrupt:
                 print("\nKeyboardInterrupt")
@@ -650,6 +734,12 @@ class REPL:
         print("  Expr[A, B]              - Expression with multiple arguments")
         print("  Expr[NestedExpr[Arg]]   - Nested expressions")
         print("  Name = Expr[A]          - Assignment")
+        print()
+        print("Multiline input:")
+        print("  - End line with \\ to continue on next line")
+        print("  - Leave brackets [ ] or parentheses ( ) open")
+        print("  - Use Ctrl+C to cancel incomplete input")
+        print("  - Prompt changes to '...' for continuation lines")
 
     def show_history(self):
         """Show command history."""
